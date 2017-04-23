@@ -1,5 +1,7 @@
 import os
+import sys
 import time
+import math
 import pickle
 import sqlite3
 from sqlite3 import Error
@@ -13,7 +15,7 @@ def timer(fn, args):
   print("\nExecuting {0}...".format(fn.__name__))
   start = time.time()
   result = fn(args)
-  print(time.time() - start)
+  print("Elapsed time: {0}".format(time.time() - start))
   return result
 
 """
@@ -97,28 +99,32 @@ def connectToDB(db_file):
   Evaluates the 'create_table_sql' string to create tables.
 """
 def createTables(conn):
+  current_year = time.strftime("%Y")
+  create_table_sql = """PRAGMA foreign_keys = ON;
 
-  create_table_sql = """CREATE TABLE IF NOT EXISTS publication(
+                        CREATE TABLE IF NOT EXISTS publication(
                           id INT PRIMARY KEY,
-                          title VARCHAR(400),
-                          year INT,
+                          title VARCHAR(400) NOT NULL,
+                          year INT CHECK(year >= 1835 and (year <= {0})),
                           booktitle VARCHAR(150),
                           pages VARCHAR(50)
                         );
 
                         CREATE TABLE IF NOT EXISTS author(
                           id INT PRIMARY KEY,
-                          name VARCHAR(150)
+                          name VARCHAR(150) NOT NULL
                         );
 
-                        CREATE TABLE IF NOT EXISTS writtenby(
-                          pub_id INT NOT NULL,
-                          author_id INT NOT NULL,
-                          FOREIGN KEY (pub_id) REFERENCES publication,
-                          FOREIGN KEY (author_id) REFERENCES author,
+                        CREATE TABLE IF NOT EXISTS written_by(
+                          pub_id INT,
+                          author_id INT,
+                          FOREIGN KEY (pub_id) REFERENCES publication
+                          ON DELETE CASCADE,
+                          FOREIGN KEY (author_id) REFERENCES author
+                          ON DELETE CASCADE,
                           PRIMARY KEY (pub_id, author_id)
                         );
-                     """
+                     """.format(current_year)
 
   try:
     c = conn.cursor()
@@ -128,14 +134,14 @@ def createTables(conn):
     print(e)
 
 """
-  Inserts records into the 'publication', 'author', and 'writtenby' relations.
+  Inserts records into the 'publication', 'author', and 'written_by' relations.
 """
 def insertRows(conn):
   """
-    Inserts a publication ID and author ID into the 'writtenby' relation.
+    Inserts a publication ID and author ID into the 'written_by' relation.
   """
   def insertWrittenBy(pub, author):
-    written_by_sql = """INSERT INTO writtenby VALUES({0}, {1});""".format(
+    written_by_sql = """INSERT INTO written_by VALUES({0}, {1});""".format(
         pub['id'],
         authors[author]
       )
@@ -149,12 +155,10 @@ def insertRows(conn):
     Inserts an author ID and author name into the 'author' relation.
   """
   def insertAuthors(pub):
-    nonlocal authors
-    nonlocal author_id
     for author in pub['authors']:
       if author not in authors:
-        authors[author] = author_id
-        author_id += 1
+        authors[author] = authors['author_id']
+        authors['author_id'] += 1
         author_sql = """INSERT INTO author VALUES({0}, "{1}");""".format(
           authors[author],
           author.replace('\"', '\'')
@@ -173,7 +177,8 @@ def insertRows(conn):
   """
   def insertPublication(pub):
     if "Engineering Advanced Web Applications: Proceedings of Workshops in connection with the 4th International Conference on Web Engineering (ICWE 2004)" in pub['title']:
-      title, year = pub['title'].split(',')[0], pub['title'].split(',')[-1]
+      string = pub['title'].split(',')[0]
+      title, year = string.split('(ICWE ')[0], string.split('(ICWE ')[1].replace(')', '')
       pub['title'], pub['year'] = title, year
 
     pub_sql = """INSERT INTO publication VALUES({0}, "{1}", {2}, "{3}", "{4}");""".format(
@@ -193,10 +198,12 @@ def insertRows(conn):
 
   try:
     c = conn.cursor()
-    authors = {}
-    author_id = 0
-    for pub in records:
+    authors = {'author_id': 0}
+    for index, pub in enumerate(records):
       insertPublication(pub)
+      if index in [math.floor((f * .1) * len(records)) for f in range(0, 10)]:
+        print("{0}%".format(int(math.ceil( float(index) / float(len(records)) * 100 )))) ,
+      if index == len(records)-1: print('100%')
     conn.commit()
     c.close()
   except Error as e:
@@ -204,18 +211,26 @@ def insertRows(conn):
 
 
 if __name__ == '__main__':
-  if os.path.isfile('pubs.db'):
-    print("Already created database.")
+  start = time.time()
+  if os.path.isfile('database.db'):
+    print("Already created database.\n \
+        Delete 'database.db' to recreate the database.\n \
+        Delete 'pubs.dat' to parse 'pubs.txt' from scratch.")
   else:
     if os.path.isfile('pubs.dat'):
       print("Already parsed records...these will be used to write to the database.")
       records = timer(pickle.load, open('pubs.dat', 'rb'))
     else:
       print("Parsing records...these will be used to write to the database.")
-      records = timer(parsePublications, 'pubs.txt')
+      records = timer(parsePublications, sys.argv[1])
       pickle.dump(records, open('pubs.dat', 'wb'))
 
     print("\nCreating database tables and inserting records...")
-    db = timer(connectToDB, 'pubs.db')
+    db = timer(connectToDB, 'database.db')
     timer(createTables, db)
     timer(insertRows, db)
+    num_pubs = db.cursor().execute("""SELECT count(*) FROM publication""").fetchone()[0]
+    num_authors = db.cursor().execute("""SELECT count(*) FROM author""").fetchone()[0]
+    num_written_by = db.cursor().execute("""SELECT count(*) FROM written_by""").fetchone()[0]
+    print("\nTotal elapsed time: {0}".format(time.time()-start))
+    print("\nNumber of records:\n\tpublication: {0}\n\tauthor:      {1}\n\twritten_by:  {2}".format(num_pubs, num_authors, num_written_by))
