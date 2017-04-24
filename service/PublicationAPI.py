@@ -1,4 +1,5 @@
 import sqlite3
+import time
 from sqlite3 import Error
 
 class PublicationAPI:
@@ -6,6 +7,7 @@ class PublicationAPI:
   __next_pub_id = None
   __next_author_id = 0
   __authors = {}
+  __current_year = time.strftime("%Y")
 
   """
     Connects to the database named in the parameter, fetches the maximum ID in
@@ -31,6 +33,11 @@ class PublicationAPI:
     [title, year, journal, pages, authors] where 'authors' is a list of authors.
   """
   def insertPublication(self, record):
+    if record[1] > self.__current_year:
+      return "You may not insert publications that have yet to be published!"
+    elif record[1] < 1835:
+      return "There were no computer engineering papers published prior to 1835!"
+
     pub = [str(r).replace('\"', '\'') for r in record[:-1]]
     authors = record[-1]
     sql = """INSERT INTO publication VALUES({0}, "{1}", {2}, "{3}", "{4}");""".format(self.__next_pub_id, *pub)
