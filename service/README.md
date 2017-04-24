@@ -96,7 +96,8 @@ written by multiple authors can be seen for each of those authors. Setting
 `reverse` to `True` orders the results in descending order. `queryRange` is a
 comma-delimited string of two integer numbers that are used for the query's
 LIMIT clause; the first value is the offsize and the second value is the number
-of records to retrieve.
+of records to retrieve. In addition to the actual query results,
+`queryPublication` also returns the cardinality of this set/multiset.
 
 Testing
 -------------------------

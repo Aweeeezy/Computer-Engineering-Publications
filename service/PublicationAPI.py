@@ -244,7 +244,7 @@ class PublicationAPI:
             'XML': convertToXML()
             }[output_format]
 
-      return formatOutput(output_format)
+      return formatOutput(output_format), len(result_pubs)
     except Error as e:
       print(e)
 
