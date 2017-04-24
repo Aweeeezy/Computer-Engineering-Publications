@@ -2,7 +2,7 @@ import os
 import sys
 import time
 import math
-import pickle
+import cPickle
 import sqlite3
 from sqlite3 import Error
 
@@ -219,11 +219,11 @@ if __name__ == '__main__':
   else:
     if os.path.isfile('pubs.dat'):
       print("Already parsed records...these will be used to write to the database.")
-      records = timer(pickle.load, open('pubs.dat', 'rb'))
+      records = timer(cPickle.load, open('pubs.dat', 'rb'))
     else:
       print("Parsing records...these will be used to write to the database.")
       records = timer(parsePublications, sys.argv[1])
-      pickle.dump(records, open('pubs.dat', 'wb'))
+      cPickle.dump(records, open('pubs.dat', 'wb'))
 
     print("\nCreating database tables and inserting records...")
     db = timer(connectToDB, 'database.db')
